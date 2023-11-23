@@ -4,22 +4,22 @@ from datetime import date
 import copy
 import random
 
+#Initial Setup
+
 def onAppStart(app):
     reset(app)
 
 def reset(app):
-    app.rows, app.cols = 9, 9
-    app.numMines = 10
-    app.fontSize = 48
-    # Easy board = 9x9, 10 mines, font 48
-    # Medium board = 16x16, 40 mines, font 24
-    # Hard board = 16x30, 99 mines, font 16
+    setSize(app, 0)
+    # Easy board (0) = 9x9, 10 mines, font 48
+    # Medium board (1) = 16x16, 40 mines, font 24
+    # Hard board (2) = 16x30, 99 mines, font 16
 
     app.showBoard = [([False] * app.cols) for row in range(app.rows)]
     app.board = [([0] * app.cols) for row in range(app.rows)]
     app.boardLeft = 30
     app.boardTop = 100
-    app.boardWidth = (app.width - (2 * app.boardLeft))
+    app.boardWidth = (600 - (2 * app.boardLeft))
     app.boardHeight = app.boardWidth
     if app.cols == 30:
         app.boardWidth *= 2
@@ -29,19 +29,46 @@ def reset(app):
     app.cellBorderWidth = 2
 
     app.flagged = []
+    app.firstClick = (None, None)
 
-    generateMines(app)
-    generateNumbers(app)
+    # generateMines(app)
+    # generateNumbers(app)
 
     app.gameOver = False
     app.win = False
+
+def setSize(app, size):
+    if size == 0:
+        app.rows, app.cols = 9, 9
+        app.numMines = 10
+        app.fontSize = 48
+    elif size == 1:
+        app.rows, app.cols = 16, 16
+        app.numMines = 40
+        app.fontSize = 24
+    elif size == 2:
+        app.rows, app.cols = 16, 30
+        app.numMines = 99
+        app.fontSize = 16
+
+
+def getFlagCount(app):
+    if len(app.flagged) > app.numMines:
+        return 0
+    return app.numMines - len(app.flagged)
 
 def generateMines(app):
     n = 0
     while n < app.numMines:
         x = random.randrange(app.rows)
         y = random.randrange(app.cols)
-        if app.board[x][y] != '*':
+
+        (firstX, firstY) = app.firstClick
+        if abs(firstX - x) <= 1 and abs(firstY - y) <= 1:
+            # guarantees no mines within the 3x3 square 
+            # that is centered around first click
+            continue
+        elif app.board[x][y] != '*':
             app.board[x][y] = '*'
             n += 1
 
@@ -70,7 +97,9 @@ def checkWin(app):
         if app.board[row][col] != '*':
             return False
     return True
-            
+
+#Control (MVC) Functions
+
 def onKeyPress(app, key):
     if key == 'r':
         reset(app)
@@ -78,16 +107,22 @@ def onKeyPress(app, key):
 def onMousePress(app, mouseX, mouseY, button):
     if app.gameOver or app.win:
         return
+    
     for row in range(app.rows):
         for col in range(app.cols):
             if mouseInCell(app, row, col, mouseX, mouseY):
                 if button == 0 and (row, col) not in app.flagged:
+                    if app.firstClick == (None, None):
+                        app.firstClick = (row, col)
+                        generateMines(app)
+                        generateNumbers(app)
                     if app.board[row][col] == 0:
                         floodFill(app, row, col)
                     elif app.board[row][col] == '*':
                         app.gameOver = True
                     app.showBoard[row][col] = True
-                elif button == 2 and not app.showBoard[row][col]:
+                elif (button == 2 and app.firstClick != (None, None) and  
+                      not app.showBoard[row][col]):
                     if (row, col) in app.flagged:
                         app.flagged.remove((row, col))
                     else:
@@ -95,7 +130,6 @@ def onMousePress(app, mouseX, mouseY, button):
                 
                 if checkWin(app):
                     app.win = True
-
 
 def mouseInCell(app, row, col, mouseX, mouseY):
     cellLeft, cellTop = getCellLeftTop(app, row, col)
@@ -135,10 +169,13 @@ def revealSurrounding(app, row, col):
         if app.board[newRow][newCol] not in ['*', 0, -1]:
             app.showBoard[newRow][newCol] = True
 
+#View (MVC) Functions Below
 
 def redrawAll(app):
     drawLabel('Minesweeper', app.width/2, app.boardTop/2, align='center',
               bold=True, size=32)
+    drawLabel(f'{getFlagCount(app)}', app.width/8, app.boardTop/2,
+              align='center', bold=True, size=32)
     drawBoard(app)
     if app.gameOver:
         drawRect(app.width/6, app.height/6, app.width*2/3, app.height*2/3,
@@ -179,9 +216,18 @@ def drawCell(app, row, col):
                   cellTop + cellHeight/2, bold=True, fill='black', 
                   size=app.fontSize, align='center')
     elif app.showBoard[row][col] == False:
-        if (row, col) in app.flagged:
-            drawLabel('^', cellLeft + cellWidth/2, cellTop + cellHeight/2,
-                      bold=True, fill='red', size=app.fontSize, align='center')
+        for i in range(len(app.flagged)):
+            (flagRow, flagCol) = app.flagged[i]
+            if (row, col) == (flagRow, flagCol):
+                if i < app.numMines:
+                    symbol = '^'
+                    color = 'red'
+                else:
+                    symbol = '?'
+                    color = 'black'
+                drawLabel(symbol, cellLeft+cellWidth/2, cellTop+cellHeight/2,
+                          bold=True, fill=color, size=app.fontSize, 
+                          align='center')
 
 def getCellLeftTop(app, row, col):
     cellWidth, cellHeight = getCellSize(app)
