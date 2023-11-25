@@ -10,7 +10,7 @@ def onAppStart(app):
     reset(app)
 
 def reset(app):
-    setSize(app, 0)
+    setSize(app, 2)
     # Easy board (0) = 9x9, 10 mines, font 48
     # Medium board (1) = 16x16, 40 mines, font 24
     # Hard board (2) = 16x30, 99 mines, font 16
@@ -138,26 +138,64 @@ def mouseInCell(app, row, col, mouseX, mouseY):
         cellTop < mouseY < cellTop + cellHeight):
         return True
 
+# ALGORITHM PSEUDOCODE FOR FLOODFILL
+# https://en.wikipedia.org/wiki/Flood_fill#Moving_the_recursion_into_a_data_structure
 def floodFill(app, row, col):
-    oldValue = 0
-    newValue = -1
-    if oldValue != newValue:
-        floodFillHelper(app, row, col, oldValue, newValue)
+    old = 0
+    new = -1
+    queue = []
+    queue.append((row, col))
+    
+    app.board[row][col] = new
+    app.showBoard[row][col] = True
+    revealSurrounding(app, row, col)
 
-def floodFillHelper(app, row, col, oldValue, newValue):
+    while len(queue) > 0:
+        currRow, currCol = queue.pop()
+
+        for drow in [-1, 1]:
+            if isValid(app, currRow + drow, currCol, old):
+                app.board[currRow + drow][currCol] = new
+                app.showBoard[currRow + drow][currCol] = True
+                revealSurrounding(app, currRow + drow, currCol)
+                queue.append((currRow + drow, currCol))
+        
+        for dcol in [-1, 1]:
+            if isValid(app, currRow, currCol + dcol, old):
+                app.board[currRow][currCol + dcol] = new
+                app.showBoard[currRow][currCol + dcol] = True
+                revealSurrounding(app, currRow, currCol + dcol)
+                queue.append((currRow, currCol + dcol))
+            
+def isValid(app, row, col, old):
     rows, cols = len(app.board), len(app.board[0])
     if ((row < 0) or (row >= rows) or
         (col < 0) or (col >= cols) or
-        (app.board[row][col] != oldValue)):
-        return
+        (app.board[row][col] != old)):
+        return False
     else:
-        app.board[row][col] = newValue
-        app.showBoard[row][col] = True
-        revealSurrounding(app, row, col)
-        floodFillHelper(app, row-1, col, oldValue, newValue) # up
-        floodFillHelper(app, row+1, col, oldValue, newValue) # down
-        floodFillHelper(app, row, col-1, oldValue, newValue) # left
-        floodFillHelper(app, row, col+1, oldValue, newValue) # right
+        return True
+
+# def floodFill(app, row, col):
+#     oldValue = 0
+#     newValue = -1
+#     if oldValue != newValue:
+#         floodFillHelper(app, row, col, oldValue, newValue)
+
+# def floodFillHelper(app, row, col, oldValue, newValue):
+#     rows, cols = len(app.board), len(app.board[0])
+#     if ((row < 0) or (row >= rows) or
+#         (col < 0) or (col >= cols) or
+#         (app.board[row][col] != oldValue)):
+#         return
+#     else:
+#         app.board[row][col] = newValue
+#         app.showBoard[row][col] = True
+#         revealSurrounding(app, row, col)
+#         floodFillHelper(app, row-1, col, oldValue, newValue)
+#         floodFillHelper(app, row+1, col, oldValue, newValue)
+#         floodFillHelper(app, row, col-1, oldValue, newValue)
+#         floodFillHelper(app, row, col+1, oldValue, newValue)
 
 def revealSurrounding(app, row, col):
     for drow, dcol in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), 
