@@ -1,16 +1,13 @@
 from cmu_graphics import *
-import datetime
-from datetime import date
 import copy
 import random
 
 #Initial Setup
-
 def onAppStart(app):
     reset(app)
 
 def reset(app):
-    setSize(app, 2)
+    setSize(app, 0)
     # Easy board (0) = 9x9, 10 mines, font 48
     # Medium board (1) = 16x16, 40 mines, font 24
     # Hard board (2) = 16x30, 99 mines, font 16
@@ -25,17 +22,26 @@ def reset(app):
         app.boardWidth *= 2
     app.height = app.boardHeight + app.boardTop + 20
     app.width = app.boardWidth + app.boardLeft * 2
-    # app.boardHeight = (app.height - (app.boardTop + 20))
     app.cellBorderWidth = 2
 
+    app.colors = ['black', 'dodgerBlue', 'green', 'red', 'darkBlue', 'brown',
+                  'skyBlue', 'purple', 'darkGray']
     app.flagged = []
     app.firstClick = (None, None)
 
     # generateMines(app)
     # generateNumbers(app)
 
+    app.time = 0
+    app.stepsPerSecond = 1
+    app.paused = False
     app.gameOver = False
     app.win = False
+
+def onStep(app):
+    if (app.firstClick != (None, None) and not app.gameOver and not app.win and
+        not app.paused):
+        app.time += 1
 
 def setSize(app, size):
     if size == 0:
@@ -50,7 +56,6 @@ def setSize(app, size):
         app.rows, app.cols = 16, 30
         app.numMines = 99
         app.fontSize = 16
-
 
 def getFlagCount(app):
     if len(app.flagged) > app.numMines:
@@ -99,13 +104,18 @@ def checkWin(app):
     return True
 
 #Control (MVC) Functions
-
 def onKeyPress(app, key):
     if key == 'r':
         reset(app)
 
-def onMousePress(app, mouseX, mouseY, button):
     if app.gameOver or app.win:
+        return
+    
+    if key == 'p':
+        app.paused = not app.paused
+
+def onMousePress(app, mouseX, mouseY, button):
+    if app.gameOver or app.win or app.paused:
         return
     
     for row in range(app.rows):
@@ -214,16 +224,38 @@ def redrawAll(app):
               bold=True, size=32)
     drawLabel(f'{getFlagCount(app)}', app.width/8, app.boardTop/2,
               align='center', bold=True, size=32)
+    
+    timeString = '00:00'
+    if app.time > 0:
+        minutes = app.time // 60
+        seconds = app.time % 60
+        timeString = f'{minutes}:{seconds}'
+        if minutes < 10:
+            timeString = '0' + timeString
+        if seconds < 10:
+            timeString = timeString[:-1] + '0' + timeString[-1]
+    drawLabel(timeString, app.width*7/8, app.boardTop/2, align='center',
+              bold=True, size=32)
+    
     drawBoard(app)
-    if app.gameOver:
+    if app.paused:
         drawRect(app.width/6, app.height/6, app.width*2/3, app.height*2/3,
-                 fill='red', opacity=75)
+                 fill='gray', opacity=90)
+        drawLabel('Paused', app.width/2, app.height/2,
+                  size=24, bold=True)
+        drawLabel('Press p to resume', app.width/2, app.height/2 + 30,
+                  size=24, bold=True)
+    elif app.gameOver:
+        drawRect(app.width/6, app.height/6, app.width*2/3, app.height*2/3,
+                 fill='red', opacity=90)
         drawLabel('You Lose! Press r to restart', app.width/2, app.height/2,
                   size=24, bold=True)
     elif app.win:
         drawRect(app.width/6, app.height/6, app.width*2/3, app.height*2/3,
-                 fill='blue', opacity=75)
+                 fill='blue', opacity=90)
         drawLabel('You Win! Press r to restart', app.width/2, app.height/2,
+                  size=24, bold=True)
+        drawLabel(f'Time: {timeString}', app.width/2, app.height/2 + 30,
                   size=24, bold=True)
 
 def drawBoard(app):
@@ -250,8 +282,10 @@ def drawCell(app, row, col):
              border='black', borderWidth=app.cellBorderWidth)
     if (app.showBoard[row][col] and 
         app.board[row][col] != 0 and app.board[row][col] != -1):
+        if type(app.board[row][col]) == int:
+            color = app.colors[app.board[row][col]]
         drawLabel(app.board[row][col], cellLeft + cellWidth/2, 
-                  cellTop + cellHeight/2, bold=True, fill='black', 
+                  cellTop + cellHeight/2, bold=True, fill=color, 
                   size=app.fontSize, align='center')
     elif app.showBoard[row][col] == False:
         for i in range(len(app.flagged)):
