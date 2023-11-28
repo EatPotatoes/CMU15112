@@ -2,6 +2,21 @@ from cmu_graphics import *
 import copy
 import random
 
+class Tile:
+    flagged = []
+
+    def __init__(self,):
+        self.hasMine = False
+        self.show = False
+        self.value = 0
+
+    def addMine(self):
+        self.hasMine = True
+        self.value = 9
+    
+    def removeMine(self):
+        self.hasMine = False
+
 #Initial Setup
 def onAppStart(app):
     reset(app)
@@ -12,8 +27,14 @@ def reset(app):
     # Medium board (1) = 16x16, 40 mines, font 24
     # Hard board (2) = 16x30, 99 mines, font 16
 
-    app.showBoard = [([False] * app.cols) for row in range(app.rows)]
-    app.board = [([0] * app.cols) for row in range(app.rows)]
+    # app.showBoard = [([False] * app.cols) for row in range(app.rows)]
+    app.board = []
+    Tile.flagged = []
+    for row in range(app.rows):
+        currRow = []
+        for col in range(app.cols):
+            currRow.append(Tile())
+        app.board.append(currRow)
     app.boardLeft = 30
     app.boardTop = 100
     app.boardWidth = (600 - (2 * app.boardLeft))
@@ -24,13 +45,10 @@ def reset(app):
     app.width = app.boardWidth + app.boardLeft * 2
     app.cellBorderWidth = 2
 
-    app.colors = ['black', 'dodgerBlue', 'green', 'red', 'darkBlue', 'brown',
-                  'skyBlue', 'purple', 'darkGray']
-    app.flagged = []
-    app.firstClick = (None, None)
+    app.colors = ['black', 'dodgerBlue', 'limeGreen', 'red', 'darkBlue', 'brown',
+                  'skyBlue', 'purple', 'darkGray', 'black']
 
-    # generateMines(app)
-    # generateNumbers(app)
+    app.firstClick = (None, None)
 
     app.time = 0
     app.stepsPerSecond = 1
@@ -58,9 +76,9 @@ def setSize(app, size):
         app.fontSize = 16
 
 def getFlagCount(app):
-    if len(app.flagged) > app.numMines:
+    if len(Tile.flagged) > app.numMines:
         return 0
-    return app.numMines - len(app.flagged)
+    return app.numMines - len(Tile.flagged)
 
 def generateMines(app):
     n = 0
@@ -73,15 +91,20 @@ def generateMines(app):
             # guarantees no mines within the 3x3 square 
             # that is centered around first click
             continue
-        elif app.board[x][y] != '*':
-            app.board[x][y] = '*'
+        # elif app.board[x][y] != '*':
+        #     app.board[x][y] = '*'
+        #     n += 1
+        elif not app.board[x][y].hasMine:
+            app.board[x][y].addMine()
             n += 1
 
 def generateNumbers(app):
     for row in range(app.rows):
         for col in range(app.cols):
-            if app.board[row][col] != '*':
-                app.board[row][col] = searchSurrounding(app, row, col)
+            if not app.board[row][col].hasMine:
+                app.board[row][col].value = searchSurrounding(app, row, col)
+            # if app.board[row][col] != '*':
+            #     app.board[row][col] = searchSurrounding(app, row, col)
 
 def searchSurrounding(app, row, col):
     count = 0
@@ -91,16 +114,20 @@ def searchSurrounding(app, row, col):
         if (newRow < 0 or newRow >= app.rows or newCol < 0 or 
             newCol >= app.cols):
             continue
-        if app.board[newRow][newCol] == '*':
-                count += 1
+        if app.board[newRow][newCol].hasMine:
+            count += 1
+        # if app.board[newRow][newCol] == '*':
+        #   count += 1
     return count
 
 def checkWin(app):
-    if len(app.flagged) != app.numMines:
+    if len(Tile.flagged) != app.numMines:
         return False
-    for row, col in app.flagged:
-        if app.board[row][col] != '*':
+    for row, col in Tile.flagged:
+        if not app.board[row][col].hasMine:
             return False
+        # if app.board[row][col] != '*':
+        #     return False
     return True
 
 #Control (MVC) Functions
@@ -121,22 +148,26 @@ def onMousePress(app, mouseX, mouseY, button):
     for row in range(app.rows):
         for col in range(app.cols):
             if mouseInCell(app, row, col, mouseX, mouseY):
-                if button == 0 and (row, col) not in app.flagged:
+                if button == 0 and (row, col) not in Tile.flagged:
                     if app.firstClick == (None, None):
                         app.firstClick = (row, col)
                         generateMines(app)
                         generateNumbers(app)
-                    if app.board[row][col] == 0:
+                    if app.board[row][col].value == 0:
                         floodFill(app, row, col)
-                    elif app.board[row][col] == '*':
+                    # if app.board[row][col] == 0:
+                    #     floodFill(app, row, col)
+                    elif app.board[row][col].hasMine:
                         app.gameOver = True
-                    app.showBoard[row][col] = True
+                    # elif app.board[row][col] == '*':
+                    #     app.gameOver = True
+                    app.board[row][col].show = True
                 elif (button == 2 and app.firstClick != (None, None) and  
-                      not app.showBoard[row][col]):
-                    if (row, col) in app.flagged:
-                        app.flagged.remove((row, col))
+                      not app.board[row][col].show):
+                    if (row, col) in Tile.flagged:
+                        Tile.flagged.remove((row, col))
                     else:
-                        app.flagged.append((row, col))
+                        Tile.flagged.append((row, col))
                 
                 if checkWin(app):
                     app.win = True
@@ -156,56 +187,33 @@ def floodFill(app, row, col):
     queue = []
     queue.append((row, col))
     
-    app.board[row][col] = new
-    app.showBoard[row][col] = True
+    app.board[row][col].value = new
+    # app.board[row][col] = new
+    app.board[row][col].show = True
     revealSurrounding(app, row, col)
 
     while len(queue) > 0:
         currRow, currCol = queue.pop()
 
-        for drow in [-1, 1]:
-            if isValid(app, currRow + drow, currCol, old):
-                app.board[currRow + drow][currCol] = new
-                app.showBoard[currRow + drow][currCol] = True
-                revealSurrounding(app, currRow + drow, currCol)
-                queue.append((currRow + drow, currCol))
-        
-        for dcol in [-1, 1]:
-            if isValid(app, currRow, currCol + dcol, old):
-                app.board[currRow][currCol + dcol] = new
-                app.showBoard[currRow][currCol + dcol] = True
-                revealSurrounding(app, currRow, currCol + dcol)
-                queue.append((currRow, currCol + dcol))
+        for drow, dcol in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), 
+                       (1, 0), (1, 1)]:
+            newRow, newCol = currRow + drow, currCol + dcol
+            if isValid(app, newRow, newCol, old):
+                app.board[newRow][newCol].value = new
+                # app.board[newRow][newCol] = new
+                app.board[newRow][newCol].show = True
+                revealSurrounding(app, newRow, newCol)
+                queue.append((newRow, newCol))
             
 def isValid(app, row, col, old):
     rows, cols = len(app.board), len(app.board[0])
     if ((row < 0) or (row >= rows) or
         (col < 0) or (col >= cols) or
-        (app.board[row][col] != old)):
+        (app.board[row][col].value != old)):
+        # (app.board[row][col] != old)):
         return False
     else:
         return True
-
-# def floodFill(app, row, col):
-#     oldValue = 0
-#     newValue = -1
-#     if oldValue != newValue:
-#         floodFillHelper(app, row, col, oldValue, newValue)
-
-# def floodFillHelper(app, row, col, oldValue, newValue):
-#     rows, cols = len(app.board), len(app.board[0])
-#     if ((row < 0) or (row >= rows) or
-#         (col < 0) or (col >= cols) or
-#         (app.board[row][col] != oldValue)):
-#         return
-#     else:
-#         app.board[row][col] = newValue
-#         app.showBoard[row][col] = True
-#         revealSurrounding(app, row, col)
-#         floodFillHelper(app, row-1, col, oldValue, newValue)
-#         floodFillHelper(app, row+1, col, oldValue, newValue)
-#         floodFillHelper(app, row, col-1, oldValue, newValue)
-#         floodFillHelper(app, row, col+1, oldValue, newValue)
 
 def revealSurrounding(app, row, col):
     for drow, dcol in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), 
@@ -214,8 +222,10 @@ def revealSurrounding(app, row, col):
         if (newRow < 0 or newRow >= app.rows or newCol < 0 or 
             newCol >= app.cols):
             continue
-        if app.board[newRow][newCol] not in ['*', 0, -1]:
-            app.showBoard[newRow][newCol] = True
+        if app.board[newRow][newCol].value not in ['*', 0, -1]:
+            app.board[newRow][newCol].show = True
+        # if app.board[newRow][newCol] not in ['*', 0, -1]:
+        #     app.showBoard[newRow][newCol] = True
 
 #View (MVC) Functions Below
 
@@ -258,6 +268,9 @@ def redrawAll(app):
         drawLabel(f'Time: {timeString}', app.width/2, app.height/2 + 30,
                   size=24, bold=True)
 
+# GENERAL STRUCTURE OF DRAWING BOARD REFERENCED FROM TETRIS HOMEWORK
+# INCLUDES DRAWBOARD, DRAWBOARDBORDER, DRAWCELL, GETCELLLEFTTOP, AND GETCELLSIZE
+# https://academy.cs.cmu.edu/exercise/13125
 def drawBoard(app):
     for row in range(app.rows):
         for col in range(app.cols):
@@ -274,22 +287,30 @@ def drawBoardBorder(app):
 def drawCell(app, row, col):
     cellLeft, cellTop = getCellLeftTop(app, row, col)
     cellWidth, cellHeight = getCellSize(app)
-    if app.board[row][col] == -1:
+    if app.board[row][col].show:
+    # if (app.board[row][col] == -1 ):
         color = 'green'
     else:
         color = 'lightGreen'
     drawRect(cellLeft, cellTop, cellWidth, cellHeight, fill=color,
              border='black', borderWidth=app.cellBorderWidth)
-    if (app.showBoard[row][col] and 
-        app.board[row][col] != 0 and app.board[row][col] != -1):
-        if type(app.board[row][col]) == int:
-            color = app.colors[app.board[row][col]]
-        drawLabel(app.board[row][col], cellLeft + cellWidth/2, 
+    if (app.board[row][col].show and 
+        app.board[row][col].value != 0 and app.board[row][col].value != -1):
+        # app.board[row][col] != 0 and app.board[row][col] != -1):
+        if type(app.board[row][col].value) == int:
+            color = app.colors[app.board[row][col].value]
+        # if type(app.board[row][col]) == int:
+            # color = app.colors[app.board[row][col]]
+        if app.board[row][col].value == 9:
+            value = '*'
+        else:
+            value = app.board[row][col].value
+        drawLabel(value, cellLeft + cellWidth/2, 
                   cellTop + cellHeight/2, bold=True, fill=color, 
                   size=app.fontSize, align='center')
-    elif app.showBoard[row][col] == False:
-        for i in range(len(app.flagged)):
-            (flagRow, flagCol) = app.flagged[i]
+    elif app.board[row][col].show == False:
+        for i in range(len(Tile.flagged)):
+            (flagRow, flagCol) = Tile.flagged[i]
             if (row, col) == (flagRow, flagCol):
                 if i < app.numMines:
                     symbol = '^'
