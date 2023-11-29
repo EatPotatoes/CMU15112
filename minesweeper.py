@@ -22,12 +22,11 @@ def onAppStart(app):
     reset(app)
 
 def reset(app):
-    setSize(app, 0)
+    setSize(app, 1)
     # Easy board (0) = 9x9, 10 mines, font 48
     # Medium board (1) = 16x16, 40 mines, font 24
     # Hard board (2) = 16x30, 99 mines, font 16
 
-    # app.showBoard = [([False] * app.cols) for row in range(app.rows)]
     app.board = []
     Tile.flagged = []
     for row in range(app.rows):
@@ -91,20 +90,45 @@ def generateMines(app):
             # guarantees no mines within the 3x3 square 
             # that is centered around first click
             continue
-        # elif app.board[x][y] != '*':
-        #     app.board[x][y] = '*'
-        #     n += 1
+        elif searchSurrounding(app, x, y) >= 5:
+            continue
         elif not app.board[x][y].hasMine:
             app.board[x][y].addMine()
             n += 1
+
+    if not solvable(app):
+        generateMines(app)
+
+# Characteristics of "unsolvable" boards (not every part of either source is used)
+# https://stackoverflow.com/questions/27815411/mine-sweeper-improve-mine-random-locate-algorithm
+# https://www.reddit.com/r/Minesweeper/comments/ze9vz4/how_are_guessfree_minesweeper_games_generated/ 
+def solvable(app):
+    for row in range(app.rows):
+        rowMines = 0 
+        for col in range(app.cols):
+            if searchSurrounding(app, row, col) >= 7:
+                return False
+            if app.board[row][col].hasMine:
+                rowMines += 1
+        if rowMines == app.rows: #check whole row for mines
+            return False
+        
+    for col in range(app.cols):
+        colMines = 0
+        for row in range(app.rows):
+            if app.board[row][col].hasMine:
+                colMines += 1
+            if colMines == app.cols: #check whole col for mines
+                return False
+    return True
+    
+
 
 def generateNumbers(app):
     for row in range(app.rows):
         for col in range(app.cols):
             if not app.board[row][col].hasMine:
                 app.board[row][col].value = searchSurrounding(app, row, col)
-            # if app.board[row][col] != '*':
-            #     app.board[row][col] = searchSurrounding(app, row, col)
 
 def searchSurrounding(app, row, col):
     count = 0
@@ -116,8 +140,6 @@ def searchSurrounding(app, row, col):
             continue
         if app.board[newRow][newCol].hasMine:
             count += 1
-        # if app.board[newRow][newCol] == '*':
-        #   count += 1
     return count
 
 def checkWin(app):
@@ -126,8 +148,7 @@ def checkWin(app):
     for row, col in Tile.flagged:
         if not app.board[row][col].hasMine:
             return False
-        # if app.board[row][col] != '*':
-        #     return False
+
     return True
 
 #Control (MVC) Functions
@@ -155,12 +176,8 @@ def onMousePress(app, mouseX, mouseY, button):
                         generateNumbers(app)
                     if app.board[row][col].value == 0:
                         floodFill(app, row, col)
-                    # if app.board[row][col] == 0:
-                    #     floodFill(app, row, col)
                     elif app.board[row][col].hasMine:
                         app.gameOver = True
-                    # elif app.board[row][col] == '*':
-                    #     app.gameOver = True
                     app.board[row][col].show = True
                 elif (button == 2 and app.firstClick != (None, None) and  
                       not app.board[row][col].show):
@@ -188,7 +205,6 @@ def floodFill(app, row, col):
     queue.append((row, col))
     
     app.board[row][col].value = new
-    # app.board[row][col] = new
     app.board[row][col].show = True
     revealSurrounding(app, row, col)
 
@@ -210,7 +226,6 @@ def isValid(app, row, col, old):
     if ((row < 0) or (row >= rows) or
         (col < 0) or (col >= cols) or
         (app.board[row][col].value != old)):
-        # (app.board[row][col] != old)):
         return False
     else:
         return True
@@ -224,8 +239,6 @@ def revealSurrounding(app, row, col):
             continue
         if app.board[newRow][newCol].value not in ['*', 0, -1]:
             app.board[newRow][newCol].show = True
-        # if app.board[newRow][newCol] not in ['*', 0, -1]:
-        #     app.showBoard[newRow][newCol] = True
 
 #View (MVC) Functions Below
 
@@ -257,12 +270,12 @@ def redrawAll(app):
                   size=24, bold=True)
     elif app.gameOver:
         drawRect(app.width/6, app.height/6, app.width*2/3, app.height*2/3,
-                 fill='red', opacity=90)
+                 fill='red', opacity=75)
         drawLabel('You Lose! Press r to restart', app.width/2, app.height/2,
                   size=24, bold=True)
     elif app.win:
         drawRect(app.width/6, app.height/6, app.width*2/3, app.height*2/3,
-                 fill='blue', opacity=90)
+                 fill='blue', opacity=75)
         drawLabel('You Win! Press r to restart', app.width/2, app.height/2,
                   size=24, bold=True)
         drawLabel(f'Time: {timeString}', app.width/2, app.height/2 + 30,
@@ -288,7 +301,6 @@ def drawCell(app, row, col):
     cellLeft, cellTop = getCellLeftTop(app, row, col)
     cellWidth, cellHeight = getCellSize(app)
     if app.board[row][col].show:
-    # if (app.board[row][col] == -1 ):
         color = 'green'
     else:
         color = 'lightGreen'
@@ -296,11 +308,8 @@ def drawCell(app, row, col):
              border='black', borderWidth=app.cellBorderWidth)
     if (app.board[row][col].show and 
         app.board[row][col].value != 0 and app.board[row][col].value != -1):
-        # app.board[row][col] != 0 and app.board[row][col] != -1):
         if type(app.board[row][col].value) == int:
             color = app.colors[app.board[row][col].value]
-        # if type(app.board[row][col]) == int:
-            # color = app.colors[app.board[row][col]]
         if app.board[row][col].value == 9:
             value = '*'
         else:
