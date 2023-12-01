@@ -30,10 +30,9 @@ def onAppStart(app):
         image = Image.open(f'images/{i}.png')
         app.numbers.append(image)
 
-    reset(app)
+    app.width, app.height = 600, 700
 
 def reset(app):
-    setSize(app, 2)
     # Easy board (0) = 9x9, 10 mines, font 48
     # Medium board (1) = 16x16, 40 mines, font 24
     # Hard board (2) = 16x30, 99 mines, font 16
@@ -46,7 +45,6 @@ def reset(app):
             currRow.append(Tile())
         app.board.append(currRow)
     setBoardSize(app)
-
 
     app.colors = ['black', 'dodgerBlue', 'limeGreen', 'red', 'darkBlue', 'brown',
                   'skyBlue', 'purple', 'darkGray', 'black']
@@ -94,7 +92,7 @@ def setBoardSize(app):
         app.height -= 2
     app.cellBorderWidth = 2
 
-def onStep(app):
+def game_onStep(app):
     app.count += 1
     if (app.firstClick != (None, None) and not app.gameOver and not app.win and
         not app.paused):
@@ -216,9 +214,13 @@ def checkWin(app):
     return True
 
 #Control (MVC) Functions
-def onKeyPress(app, key):
+def game_onKeyPress(app, key):
     if key == 'r':
         reset(app)
+
+    if key == 'm' and app.paused:
+        setActiveScreen('home')
+        app.width, app.height = 600, 700
 
     if app.gameOver or app.win:
         return
@@ -226,7 +228,7 @@ def onKeyPress(app, key):
     if key == 'p':
         app.paused = not app.paused
 
-def onMousePress(app, mouseX, mouseY, button):
+def game_onMousePress(app, mouseX, mouseY, button):
     if app.gameOver or app.win or app.paused:
         return
     
@@ -307,7 +309,7 @@ def revealSurrounding(app, row, col):
 
 #View (MVC) Functions Below
 
-def redrawAll(app):
+def game_redrawAll(app):
     drawLabel('Minesweeper', app.width/2, app.boardTop/2, align='center',
               bold=True, size=32)
     drawLabel(f'{getFlagCount(app)}', app.width/8, app.boardTop/2,
@@ -330,24 +332,30 @@ def redrawAll(app):
     if app.paused:
         drawRect(app.width/6, app.height/6, app.width*2/3, app.height*2/3,
                  fill='gray', opacity=90)
-        drawLabel('Paused', app.width/2, app.height/2,
+        drawLabel('Paused', app.width/2, app.height/2 - 30,
                   size=24, bold=True)
-        drawLabel('Press p to resume', app.width/2, app.height/2 + 30,
+        drawLabel('Press p to resume', app.width/2, app.height/2,
+                  size=24, bold=True)
+        drawLabel('Press m to go to main menu', app.width/2, app.height/2 + 30,
                   size=24, bold=True)
     elif app.gameOver:
         drawRect(app.width/6, app.height/6, app.width*2/3, app.height*2/3,
                  fill='red', opacity=75)
-        drawLabel('You Lose! Press r to restart', app.width/2, app.height/2,
+        drawLabel('You Lose! Press r to restart', app.width/2, app.height/2 - 15,
+                  size=24, bold=True)
+        drawLabel('Press m to go to main menu', app.width/2, app.height/2 + 15,
                   size=24, bold=True)
     elif app.win:
         drawRect(app.width/6, app.height/6, app.width*2/3, app.height*2/3,
                  fill='blue', opacity=75)
-        drawLabel('You Win! Press r to restart', app.width/2, app.height/2,
+        drawLabel('You Win! Press r to restart', app.width/2, app.height/2 - 30,
                   size=24, bold=True)
-        drawLabel(f'Time: {timeString}', app.width/2, app.height/2 + 30,
+        drawLabel(f'Time: {timeString}', app.width/2, app.height/2,
+                  size=24, bold=True)
+        drawLabel('Press m to go to main menu', app.width/2, app.height/2 + 30,
                   size=24, bold=True)
 
-# GENERAL STRUCTURE OF DRAWING BOARD REFERENCED FROM TETRIS HOMEWORK
+# GENERAL STRUCTURE OF DRAWING BOARD REFERENCED FROM TETRIS HOMEWORK.
 # INCLUDES DRAWBOARD, DRAWBOARDBORDER, DRAWCELL, GETCELLLEFTTOP, AND GETCELLSIZE
 # https://academy.cs.cmu.edu/exercise/13125
 def drawBoard(app):
@@ -385,10 +393,6 @@ def drawCell(app, row, col):
             number = app.numImages[app.board[row][col].value - 1]
             drawImage(number, cellLeft + cellWidth/2, 
                   cellTop + cellHeight/2, align='center')
-            # value = app.board[row][col].value
-            # drawLabel(value, cellLeft + cellWidth/2, 
-            #       cellTop + cellHeight/2, bold=True, fill=color, 
-            #       size=app.fontSize, align='center')
     elif app.board[row][col].show == False:
         for i in range(len(Tile.flagged)):
             (flagRow, flagCol) = Tile.flagged[i]
@@ -412,7 +416,62 @@ def getCellSize(app):
     cellHeight = app.boardHeight / app.rows
     return (int(cellWidth), int(cellHeight))
 
+##------------------------------------------------------------------------------
+
+def home_redrawAll(app):
+    drawRect(0, 0, app.width, app.height, fill='lightGreen')
+    drawLabel('Minesweeper', app.width/2, app.height/10, align='top',
+              bold=True, size=60)
+    
+    text = ['Easy', 'Medium', 'Hard', 'Rules']
+    #Buttons
+    for i in range(2, 6):
+        drawRect(app.width/2, app.height*i/7, app.width/3, app.height/10, 
+                 align='center', border='black', fill='lightGray')
+        
+        drawLabel(text[i-2], app.width/2, app.height*i/7, size=36, bold=True,
+                align='center')
+        
+def home_onMousePress(app, mouseX, mouseY, button):
+    for i in range(4):
+        startX, endX = 200, 400
+        startY, endY = 165 + 100*i, 235 + 100*i
+        if (startX <= mouseX <= endX and startY <= mouseY <= endY):
+            if i < 3:
+                setSize(app, i)
+                reset(app)
+                setActiveScreen('game')
+            else:
+                setActiveScreen('rules')
+
+##------------------------------------------------------------------------------
+
+def rules_redrawAll(app):
+    drawRect(0, 0, app.width, app.height, fill='lightBlue')
+    drawLabel('Rules', app.width/2, app.height/10, align='top',
+              bold=True, size=48)
+    text = [
+        'Mines will appear randomly on the board',
+        'Left-click to reveal tiles',
+        'Right-click to flag/unflag',
+        'Revealed tiles with numbers indicate the',
+        'number of mines immediately around the tile',
+        'Revealing a mine leads to lose',
+        'Flagging all mines leads to win',
+        'press p to pause',
+        'press r to restart',
+        'press m to return to main menu'
+    ]
+    for i in range(len(text)):
+        drawLabel(text[i], app.width/2, 150 + 50*i, align='top',
+                  size=16)
+        
+def rules_onKeyPress(app, key):
+    if key == 'm':
+        setActiveScreen('home')
+
 def main():
-    runApp(width=600, height=800)
+    # runApp(width=600, height=800)
+    runAppWithScreens(initialScreen='home')
 
 main()
