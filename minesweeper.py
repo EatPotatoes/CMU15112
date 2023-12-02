@@ -11,6 +11,8 @@ class Tile:
         self.hasMine = False
         self.show = False
         self.value = 0
+        self.hasFlag = False
+        self.showHint = False
 
     def addMine(self):
         self.hasMine = True
@@ -106,6 +108,38 @@ def revealNextMine(app):
             app.board[x][y].show = True
             return
 
+#https://github.com/Developer-Mike/Minesweeper-AI/blob/master/game.py 
+def hint(app):
+    for row in range(app.rows):
+        for col in range(app.cols):
+            currTile = app.board[row][col]
+            if not currTile.show:
+                continue
+            neighbors, flags = getUncoveredNeighbors(app, row, col)
+            uncovered = len(neighbors) + flags
+            if currTile.value == uncovered:
+                for neighbor in neighbors:
+                    print(row, col, flags, uncovered)
+                    neighbor.showHint = True
+                    return
+                        
+
+def getUncoveredNeighbors(app, row, col):
+    neighbors = []
+    flags = 0
+    for drow, dcol in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), 
+                       (1, 0), (1, 1)]:
+        newRow, newCol = row + drow, col + dcol
+        if (newRow < 0 or newRow >= app.rows or newCol < 0 or 
+            newCol >= app.cols):
+            continue
+        neighbor = app.board[newRow][newCol]
+        if neighbor.show == False and not neighbor.hasFlag:
+            neighbors.append(app.board[newRow][newCol])
+        if neighbor.hasFlag:
+            print('FLAG')
+            flags += 1
+    return neighbors, flags
 
 def setSize(app, size):
     if size == 0:
@@ -218,9 +252,13 @@ def game_onKeyPress(app, key):
     if key == 'r':
         reset(app)
 
-    if key == 'm' and app.paused:
+    if key == 'm' and (app.paused or app.gameOver or app.win):
         setActiveScreen('home')
         app.width, app.height = 600, 700
+
+    if (key == 'h' and not (app.paused or app.gameOver or app.win or 
+                            app.firstClick == (None, None))):
+        hint(app)
 
     if app.gameOver or app.win:
         return
@@ -228,6 +266,8 @@ def game_onKeyPress(app, key):
     if key == 'p':
         app.paused = not app.paused
 
+# Had to mess with cmu_graphics file for right clicking to work with screens 
+# seen here https://piazza.com/class/lkq6ivek5cg1bc/post/2427 
 def game_onMousePress(app, mouseX, mouseY, button):
     if app.gameOver or app.win or app.paused:
         return
@@ -246,12 +286,16 @@ def game_onMousePress(app, mouseX, mouseY, button):
                         app.gameOver = True
                         app.revealMines = True
                     app.board[row][col].show = True
+                    app.board[row][col].showHint = False
                 elif (button == 2 and app.firstClick != (None, None) and  
                       not app.board[row][col].show):
+                    app.board[row][col].showHint = False
                     if (row, col) in Tile.flagged:
                         Tile.flagged.remove((row, col))
+                        app.board[row][col].hasFlag = False
                     else:
                         Tile.flagged.append((row, col))
+                        app.board[row][col].hasFlag = True
                 
                 if checkWin(app):
                     app.win = True
@@ -378,10 +422,13 @@ def drawCell(app, row, col):
     cellWidth, cellHeight = getCellSize(app)
     if app.board[row][col].show:
         color = 'green'
+    elif app.board[row][col].showHint:
+        color = 'crimson'
     else:
         color = 'lightGreen'
     drawRect(cellLeft, cellTop, cellWidth, cellHeight, fill=color,
              border='black', borderWidth=app.cellBorderWidth)
+    #
     if (app.board[row][col].show and 
         app.board[row][col].value != 0 and app.board[row][col].value != -1):
         if type(app.board[row][col].value) == int:
@@ -393,6 +440,7 @@ def drawCell(app, row, col):
             number = app.numImages[app.board[row][col].value - 1]
             drawImage(number, cellLeft + cellWidth/2, 
                   cellTop + cellHeight/2, align='center')
+    #Draw flags
     elif app.board[row][col].show == False:
         for i in range(len(Tile.flagged)):
             (flagRow, flagCol) = Tile.flagged[i]
