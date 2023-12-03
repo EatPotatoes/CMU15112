@@ -1,9 +1,15 @@
+### ALBERT ZHANG (albertz2)
+### CMU 15-112 F23 Term Project
+### MINESWEEPER
+
 from cmu_graphics import *
 from PIL import Image
 import copy
 import random
 
+# ༼ つ ◕_◕ ༽つ We love OOP ༼ つ ◕_◕ ༽つ
 class Tile:
+    #Keep track of all flagged tiles and tile size (depends on board size)
     flagged = []
     size = None
 
@@ -12,7 +18,9 @@ class Tile:
         self.show = False
         self.value = 0
         self.hasFlag = False
-        self.showHint = False
+        self.showMineHint = False
+        self.showSpaceHint = False
+        self.highlight = False
 
     def addMine(self):
         self.hasMine = True
@@ -35,10 +43,7 @@ def onAppStart(app):
     app.width, app.height = 600, 700
 
 def reset(app):
-    # Easy board (0) = 9x9, 10 mines, font 48
-    # Medium board (1) = 16x16, 40 mines, font 24
-    # Hard board (2) = 16x30, 99 mines, font 16
-
+    #Initialize empty board (mines placed after first click)
     app.board = []
     Tile.flagged = []
     for row in range(app.rows):
@@ -48,16 +53,16 @@ def reset(app):
         app.board.append(currRow)
     setBoardSize(app)
 
-    app.colors = ['black', 'dodgerBlue', 'limeGreen', 'red', 'darkBlue', 'brown',
-                  'skyBlue', 'purple', 'darkGray', 'black']
-
+    #Variables for gameplay
     app.firstClick = (None, None)
     app.mineCoords = []
 
+    #Variables for stopwatch
     app.time = 0
     app.stepsPerSecond = 10
     app.count = 0
 
+    #Variables for game status (pause/win/lose)
     app.paused = False
     app.gameOver = False
     app.win = False
@@ -79,6 +84,7 @@ def reset(app):
         app.numImages.append(newImage)
     
 def setBoardSize(app):
+    #Set board dimensions
     app.boardLeft = 30
     app.boardTop = 100
     app.boardWidth = (600 - (2 * app.boardLeft))
@@ -95,33 +101,66 @@ def setBoardSize(app):
     app.cellBorderWidth = 2
 
 def game_onStep(app):
+    #Increase stopwatch if game is going
     app.count += 1
     if (app.firstClick != (None, None) and not app.gameOver and not app.win and
         not app.paused):
         app.time += 1 if app.count % 10 == 0 else 0
+    #Reveal mines one by one if game is over
     if app.revealMines:
         revealNextMine(app)
 
 def revealNextMine(app):
+    #Go through mines and reveal next one
     for x, y in app.mineCoords:
         if app.board[x][y].show == False:
             app.board[x][y].show = True
             return
 
+#Find (VERY BASIC) move that is possible from given information, just overlooked
+#by the player (Note: This is not a solver, it just reveals a move)
 #https://github.com/Developer-Mike/Minesweeper-AI/blob/master/game.py 
 def hint(app):
+    #Basically only reveals with given information
+    #Also functions under the assumption user has not made any mistakes yet
     for row in range(app.rows):
         for col in range(app.cols):
             currTile = app.board[row][col]
             if not currTile.show:
                 continue
+            #Get neighboring tiles of any given revealed space
             neighbors, flags = getUncoveredNeighbors(app, row, col)
             uncovered = len(neighbors) + flags
+            #If number of flags + number of unrevealed spaces = number of mines
+            #Show mines as hint
             if currTile.value == uncovered:
-                for neighbor in neighbors:
-                    print(row, col, flags, uncovered)
-                    neighbor.showHint = True
+                for i in range(uncovered - flags):
+                    neighbor = neighbors[i]
+                # for neighbor in neighbors:
+                    neighbor.showMineHint = True
+                    currTile.highlight = True
                     return
+            #If all mines are flagged and there are neighbors uncovered
+            #They are safe to uncover
+            elif currTile.value == flags and len(neighbors) > 0:
+                for neighbor in neighbors:
+                    neighbor.showSpaceHint = True
+                    currTile.highlight = True
+                return
+
+def unhighlight(app):
+    # for row in range(app.rows):
+    #     for col in range(app.cols):
+    #         currTile = app.board[row][col]
+    #         if currTile.showMineHint or currTile.showSpaceHint:
+    #             return
+    
+    for row in range(app.rows):
+        for col in range(app.cols):
+            currTile = app.board[row][col]
+            currTile.highlight = False
+            currTile.showSpaceHint = False
+            currTile.showMineHint = False
                         
 
 def getUncoveredNeighbors(app, row, col):
@@ -137,11 +176,13 @@ def getUncoveredNeighbors(app, row, col):
         if neighbor.show == False and not neighbor.hasFlag:
             neighbors.append(app.board[newRow][newCol])
         if neighbor.hasFlag:
-            print('FLAG')
             flags += 1
     return neighbors, flags
 
 def setSize(app, size):
+    # Easy board (0) = 9x9, 10 mines, font 48
+    # Medium board (1) = 16x16, 40 mines, font 24
+    # Hard board (2) = 16x30, 99 mines, font 16
     if size == 0:
         app.rows, app.cols = 9, 9
         app.numMines = 10
@@ -220,13 +261,36 @@ def solvable(app):
 
     return True
     
+def isRectangular(app):
+    minRow, maxRow = app.rows, -1
+    minCol, maxCol = app.cols, -1
+    count = 0
+    for row in range(app.rows):
+        for col in range(app.cols):
+            currTile = app.board[row][col]
+            if currTile.show:
+                count += 1
+                if row > maxRow:
+                    maxRow = row
+                if row < minRow:
+                    minRow = row
+                if col > maxCol:
+                    maxCol = col
+                if col < minCol:
+                    minCol = col
+    area = (maxRow - minRow + 1) * (maxCol - minCol + 1)
+    return area == count
+
 def generateNumbers(app):
+    #After mines placed, each tile has an unchanging number of adjacent mines,
+    #assigned in this function
     for row in range(app.rows):
         for col in range(app.cols):
             if not app.board[row][col].hasMine:
                 app.board[row][col].value = searchSurrounding(app, row, col)
 
 def searchSurrounding(app, row, col):
+    #Counts number of adjacent mines
     count = 0
     for drow, dcol in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), 
                        (1, 0), (1, 1)]:
@@ -239,6 +303,7 @@ def searchSurrounding(app, row, col):
     return count
 
 def checkWin(app):
+    #Win is defined when all tiles with mines are flagged
     if len(Tile.flagged) != app.numMines:
         return False
     for row, col in Tile.flagged:
@@ -274,29 +339,56 @@ def game_onMousePress(app, mouseX, mouseY, button):
     
     for row in range(app.rows):
         for col in range(app.cols):
+            #Checks the tile on board that is clicked
             if mouseInCell(app, row, col, mouseX, mouseY):
+                #User left click
                 if button == 0 and (row, col) not in Tile.flagged:
+                    #First Click generates board
                     if app.firstClick == (None, None):
                         app.firstClick = (row, col)
                         generateMines(app)
                         generateNumbers(app)
+                        floodFill(app, row, col)
+                        #Only chance for rectangular start is back-to-back
+                        #generation of rectangular floodfills (very unlikely)
+                        #this is because while loop was infinite for some reason
+                        #and I could not figure out why
+                        if isRectangular(app):
+                            reset(app)
+                            app.firstClick = (row, col)
+                            generateMines(app)
+                            generateNumbers(app)
+                            floodFill(app, row, col)
+                    #Floodfill if click on empty space
                     if app.board[row][col].value == 0:
                         floodFill(app, row, col)
+                    #Click is on a mine = lose game
                     elif app.board[row][col].hasMine:
                         app.gameOver = True
                         app.revealMines = True
+                    #Reset the background colors of tiles after a hint
                     app.board[row][col].show = True
-                    app.board[row][col].showHint = False
+                    app.board[row][col].showMineHint = False
+                    app.board[row][col].showSpaceHint = False
+                    unhighlight(app)
+                #User right click (also checks no flags before mine placement)
+                #also checks not flagging a revealed tile
                 elif (button == 2 and app.firstClick != (None, None) and  
                       not app.board[row][col].show):
-                    app.board[row][col].showHint = False
+                    #Reset the background colors of tiles after a hint
+                    app.board[row][col].showMineHint = False
+                    app.board[row][col].showSpaceHint = False
+                    unhighlight(app)
+                    #Remove flag if space was flagged
                     if (row, col) in Tile.flagged:
                         Tile.flagged.remove((row, col))
                         app.board[row][col].hasFlag = False
+                    #Add flag if space was not flagged and eligible for flag
                     else:
                         Tile.flagged.append((row, col))
                         app.board[row][col].hasFlag = True
                 
+                #If last move was game winning, change status to won
                 if checkWin(app):
                     app.win = True
 
@@ -310,6 +402,7 @@ def mouseInCell(app, row, col, mouseX, mouseY):
 # ALGORITHM PSEUDOCODE FOR FLOODFILL
 # https://en.wikipedia.org/wiki/Flood_fill#Moving_the_recursion_into_a_data_structure
 def floodFill(app, row, col):
+    #Creates a queue of tiles to be revealed by floodfill
     old = 0
     new = -1
     queue = []
@@ -319,20 +412,22 @@ def floodFill(app, row, col):
     app.board[row][col].show = True
     revealSurrounding(app, row, col)
 
+    #Continue to reveal tiles in queue until queue empty
     while len(queue) > 0:
         currRow, currCol = queue.pop()
 
         for drow, dcol in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), 
                        (1, 0), (1, 1)]:
             newRow, newCol = currRow + drow, currCol + dcol
+            #Adds tiles to queue that can be floodfilled
             if isValid(app, newRow, newCol, old):
                 app.board[newRow][newCol].value = new
-                # app.board[newRow][newCol] = new
                 app.board[newRow][newCol].show = True
                 revealSurrounding(app, newRow, newCol)
                 queue.append((newRow, newCol))
             
 def isValid(app, row, col, old):
+    #Tile is valid to be floodfilled if same value and not out of bounds
     rows, cols = len(app.board), len(app.board[0])
     if ((row < 0) or (row >= rows) or
         (col < 0) or (col >= cols) or
@@ -342,6 +437,7 @@ def isValid(app, row, col, old):
         return True
 
 def revealSurrounding(app, row, col):
+    #Reveals surrounding tiles so floodfill includes numbers on edge
     for drow, dcol in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), 
                        (1, 0), (1, 1)]:
         newRow, newCol = row + drow, col + dcol
@@ -360,6 +456,7 @@ def game_redrawAll(app):
               align='center', bold=True, size=32)
     drawImage(app.headerFlag, app.width/8 + 40, app.boardTop/2, align='center')
     
+    #Stopwatch
     timeString = '00:00'
     if app.time > 0:
         minutes = app.time // 60
@@ -373,6 +470,8 @@ def game_redrawAll(app):
               bold=True, size=32)
     
     drawBoard(app)
+
+    #Paused screen
     if app.paused:
         drawRect(app.width/6, app.height/6, app.width*2/3, app.height*2/3,
                  fill='gray', opacity=90)
@@ -382,6 +481,7 @@ def game_redrawAll(app):
                   size=24, bold=True)
         drawLabel('Press m to go to main menu', app.width/2, app.height/2 + 30,
                   size=24, bold=True)
+    #Game over screen (loss)
     elif app.gameOver:
         drawRect(app.width/6, app.height/6, app.width*2/3, app.height*2/3,
                  fill='red', opacity=75)
@@ -389,6 +489,7 @@ def game_redrawAll(app):
                   size=24, bold=True)
         drawLabel('Press m to go to main menu', app.width/2, app.height/2 + 15,
                   size=24, bold=True)
+    #Win screen
     elif app.win:
         drawRect(app.width/6, app.height/6, app.width*2/3, app.height*2/3,
                  fill='blue', opacity=75)
@@ -420,19 +521,24 @@ def drawBoardBorder(app):
 def drawCell(app, row, col):
     cellLeft, cellTop = getCellLeftTop(app, row, col)
     cellWidth, cellHeight = getCellSize(app)
-    if app.board[row][col].show:
+
+    #Changes tile background based on hints or if tile has been revealed
+    if app.board[row][col].highlight:
+        color = 'gold'
+    elif app.board[row][col].show:
         color = 'green'
-    elif app.board[row][col].showHint:
+    elif app.board[row][col].showMineHint:
         color = 'crimson'
+    elif app.board[row][col].showSpaceHint:
+        color = 'blue'
     else:
         color = 'lightGreen'
     drawRect(cellLeft, cellTop, cellWidth, cellHeight, fill=color,
              border='black', borderWidth=app.cellBorderWidth)
-    #
+    
+    #Draws tile that are revealed and not empty (aka tile has number or mine)
     if (app.board[row][col].show and 
         app.board[row][col].value != 0 and app.board[row][col].value != -1):
-        if type(app.board[row][col].value) == int:
-            color = app.colors[app.board[row][col].value]
         if app.board[row][col].value == 9:
             drawImage(app.tileMine, cellLeft+cellWidth/2, cellTop+cellHeight/2,
                       align='center')
@@ -471,8 +577,8 @@ def home_redrawAll(app):
     drawLabel('Minesweeper', app.width/2, app.height/10, align='top',
               bold=True, size=60)
     
-    text = ['Easy', 'Medium', 'Hard', 'Rules']
     #Buttons
+    text = ['Easy', 'Medium', 'Hard', 'Rules']
     for i in range(2, 6):
         drawRect(app.width/2, app.height*i/7, app.width/3, app.height/10, 
                  align='center', border='black', fill='lightGray')
@@ -495,7 +601,12 @@ def home_onMousePress(app, mouseX, mouseY, button):
 ##------------------------------------------------------------------------------
 
 def rules_redrawAll(app):
+    #Background
     drawRect(0, 0, app.width, app.height, fill='lightBlue')
+    #Back button
+    drawRect(10, 10, 100, 40, fill='lightGray', border='black')
+    drawLabel('Back', 60, 30, size=24, fill='black', bold=True, align='center')
+    #Rules text
     drawLabel('Rules', app.width/2, app.height/10, align='top',
               bold=True, size=48)
     text = [
@@ -506,9 +617,10 @@ def rules_redrawAll(app):
         'number of mines immediately around the tile',
         'Revealing a mine leads to lose',
         'Flagging all mines leads to win',
-        'press p to pause',
-        'press r to restart',
-        'press m to return to main menu'
+        'Press p to pause',
+        'Press r to restart',
+        'Press h for a hint (blue for clear, red for mine)',
+        'Press m to return to main menu while paused or game over'
     ]
     for i in range(len(text)):
         drawLabel(text[i], app.width/2, 150 + 50*i, align='top',
@@ -516,6 +628,12 @@ def rules_redrawAll(app):
         
 def rules_onKeyPress(app, key):
     if key == 'm':
+        setActiveScreen('home')
+
+def rules_onMousePress(app, mouseX, mouseY, button):
+    startX, startY = 10, 10
+    endX, endY = 100, 40
+    if (startX <= mouseX <= endX and startY <= mouseY <= endY):
         setActiveScreen('home')
 
 def main():
