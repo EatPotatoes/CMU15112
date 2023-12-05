@@ -6,6 +6,7 @@ from cmu_graphics import *
 from PIL import Image
 import copy
 import random
+import math
 
 # ༼ つ ◕_◕ ༽つ We love OOP ༼ つ ◕_◕ ༽つ
 class Tile:
@@ -89,14 +90,17 @@ def setBoardSize(app):
     app.boardTop = 100
     app.boardWidth = (600 - (2 * app.boardLeft))
     app.boardHeight = app.boardWidth
-    if app.cols == 30:
-        app.boardWidth *= 2
+    if app.cols >= 30:
+        app.boardWidth *= math.floor(app.cols / 16) + 1
+        app.boardWidth = 1400
+    if app.rows > 16:
+        app.boardHeight = 700
     app.height = app.boardHeight + app.boardTop + 20
     app.width = app.boardWidth + app.boardLeft * 2
-    if app.cols == 16:
+    if app.cols >= 16:
         app.width -= 12
         app.height -= 2
-    elif app.cols == 30:
+    elif app.cols >= 30:
         app.height -= 2
     app.cellBorderWidth = 2
 
@@ -128,19 +132,20 @@ def hint(app):
             currTile = app.board[row][col]
             if not currTile.show:
                 continue
+
             #Get neighboring tiles of any given revealed space
             neighbors, flags = getUncoveredNeighbors(app, row, col)
             uncovered = len(neighbors) + flags
+
             #If number of flags + number of unrevealed spaces = number of mines
-            #Show mines as hint
+            #Show mine as hint
             if currTile.value == uncovered:
-                for i in range(uncovered - flags):
-                    neighbor = neighbors[i]
-                # for neighbor in neighbors:
+                for neighbor in neighbors:
                     neighbor.showMineHint = True
                     currTile.highlight = True
                     return
-            #If all mines are flagged and there are neighbors uncovered
+                
+            #If all nieghbor mines are flagged and there are neighbors uncovered
             #They are safe to uncover
             elif currTile.value == flags and len(neighbors) > 0:
                 for neighbor in neighbors:
@@ -149,12 +154,8 @@ def hint(app):
                 return
 
 def unhighlight(app):
-    # for row in range(app.rows):
-    #     for col in range(app.cols):
-    #         currTile = app.board[row][col]
-    #         if currTile.showMineHint or currTile.showSpaceHint:
-    #             return
-    
+    #remove all hint-based highlights from board
+    #this function is called on user action
     for row in range(app.rows):
         for col in range(app.cols):
             currTile = app.board[row][col]
@@ -169,12 +170,15 @@ def getUncoveredNeighbors(app, row, col):
     for drow, dcol in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), 
                        (1, 0), (1, 1)]:
         newRow, newCol = row + drow, col + dcol
+        #Go through all 8 neighbors (excluding out of bounds)
         if (newRow < 0 or newRow >= app.rows or newCol < 0 or 
             newCol >= app.cols):
             continue
         neighbor = app.board[newRow][newCol]
+        #If neighbor unrevealed and has no flag, add to neighbor list
         if neighbor.show == False and not neighbor.hasFlag:
             neighbors.append(app.board[newRow][newCol])
+        #If neighbor has flag, add to count of neighboring flags
         if neighbor.hasFlag:
             flags += 1
     return neighbors, flags
@@ -195,6 +199,46 @@ def setSize(app, size):
         app.rows, app.cols = 16, 30
         app.numMines = 99
         app.fontSize = 18
+    elif size == 3:
+        app.rows, app.cols, app.numMines = getSize(app)
+
+def getSize(app):
+    rows = app.getTextInput('''Enter number of rows 5-25 or -1 to cancel
+                            (about 1:2 rows:cols is ideal)''')
+    if rows == '-1':  
+        return (-1, -1, -1)
+    #rows must be numbers only
+    while not rows.isdigit() or int(rows) > 25 or int(rows) <= 4:  
+        if rows == '-1':  
+            return (-1, -1, -1)
+        rows = app.getTextInput('''Invalid: Enter number of rows 5-25 or 
+                                -1 to cancel (about 1:2 rows:cols is ideal)''')
+        
+    cols = app.getTextInput('''Enter number of columns 10-50 or -1 to cancel
+                            (about 1:2 rows:cols is ideal)''')
+    if cols == '-1':  
+        return (-1, -1, -1)
+    #cols must be numbers only
+    while not cols.isdigit() or int(cols) > 50 or int(cols) <= 9:  
+        if cols == '-1':  
+            return (-1, -1, -1)
+        cols = app.getTextInput('''Invalid: Enter number of cols 10-50 or 
+                                -1 to cancel (about 1:2 rows:cols is ideal)''')
+        
+    mines = app.getTextInput('''Enter number of mines 
+                             (less than 0.5*rows*cols) or -1 to cancel 
+                             (about 1:8 mines:tiles is ideal)''')
+    if mines == '-1':  
+        return (-1, -1, -1)
+    #mines must be less than number of tiles
+    while not mines.isdigit() or int(mines) >= int(int(rows) * int(cols) * 0.5):  
+        if mines == '-1':  
+            return (-1, -1, -1)
+        mines= app.getTextInput('''Invalid: Enter number of mines 
+                                (less than 0.5*rows*cols) or -1 to cancel 
+                                (about 1:8 mines:tiles is ideal)''')
+        
+    return int(rows), int(cols), int(mines)
 
 def getFlagCount(app):
     if len(Tile.flagged) > app.numMines:
@@ -262,6 +306,8 @@ def solvable(app):
     return True
     
 def isRectangular(app):
+    #Get min and max row and col of the first click floodfill
+    #also count number of tiles revealed by floodfill
     minRow, maxRow = app.rows, -1
     minCol, maxCol = app.cols, -1
     count = 0
@@ -278,8 +324,12 @@ def isRectangular(app):
                     maxCol = col
                 if col < minCol:
                     minCol = col
+    #Floodfill is rectangular if number of revealed tiles from floodfill is
+    #equal to area of rectangle of min and max row and col
     area = (maxRow - minRow + 1) * (maxCol - minCol + 1)
     return area == count
+    #I am pretty sure there is no exception to this but if there is I have not
+    #run into it and either way it will just regenerate a non-rectangular area
 
 def generateNumbers(app):
     #After mines placed, each tile has an unchanging number of adjacent mines,
@@ -349,10 +399,7 @@ def game_onMousePress(app, mouseX, mouseY, button):
                         generateMines(app)
                         generateNumbers(app)
                         floodFill(app, row, col)
-                        #Only chance for rectangular start is back-to-back
-                        #generation of rectangular floodfills (very unlikely)
-                        #this is because while loop was infinite for some reason
-                        #and I could not figure out why
+                        #Regenerate board in case of rectangular start
                         if isRectangular(app):
                             reset(app)
                             app.firstClick = (row, col)
@@ -578,8 +625,8 @@ def home_redrawAll(app):
               bold=True, size=60)
     
     #Buttons
-    text = ['Easy', 'Medium', 'Hard', 'Rules']
-    for i in range(2, 6):
+    text = ['Easy', 'Medium', 'Hard', 'Custom', 'Rules']
+    for i in range(2, 7):
         drawRect(app.width/2, app.height*i/7, app.width/3, app.height/10, 
                  align='center', border='black', fill='lightGray')
         
@@ -587,14 +634,17 @@ def home_redrawAll(app):
                 align='center')
         
 def home_onMousePress(app, mouseX, mouseY, button):
-    for i in range(4):
+    for i in range(5):
         startX, endX = 200, 400
         startY, endY = 165 + 100*i, 235 + 100*i
         if (startX <= mouseX <= endX and startY <= mouseY <= endY):
-            if i < 3:
+            if i < 4:
                 setSize(app, i)
-                reset(app)
-                setActiveScreen('game')
+                if (app.rows, app.cols, app.numMines) == (-1, -1, -1):
+                    setActiveScreen('home')
+                else:
+                    reset(app)
+                    setActiveScreen('game')
             else:
                 setActiveScreen('rules')
 
@@ -610,7 +660,7 @@ def rules_redrawAll(app):
     drawLabel('Rules', app.width/2, app.height/10, align='top',
               bold=True, size=48)
     text = [
-        'Mines will appear randomly on the board',
+        'Mines will be placed randomly on the board',
         'Left-click to reveal tiles',
         'Right-click to flag/unflag',
         'Revealed tiles with numbers indicate the',
