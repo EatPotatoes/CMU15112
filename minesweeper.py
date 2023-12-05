@@ -74,10 +74,10 @@ def reset(app):
     app.headerFlag = CMUImage(app.flag.resize((30, 30)))
     Tile.size = getCellSize(app)
     (x, y) = Tile.size
-    Tile.size = (x - 5, y - 5)
+    Tile.size = (x - 5, y - 5) #Resize mine and flag images to fit in tile
     app.tileFlag = CMUImage(app.flag.resize(Tile.size))
     app.tileMine = CMUImage(app.mine.resize(Tile.size))
-    Tile.size = (x - 15, y - 15)
+    Tile.size = (x - 15, y - 15) #Resize number images to fit in tile
     
     app.numImages = []
     for image in app.numbers:
@@ -90,7 +90,7 @@ def setBoardSize(app):
     app.boardTop = 100
     app.boardWidth = (600 - (2 * app.boardLeft))
     app.boardHeight = app.boardWidth
-    if app.cols >= 30:
+    if app.cols > 16:
         app.boardWidth *= math.floor(app.cols / 16) + 1
         app.boardWidth = 1400
     if app.rows > 16:
@@ -200,10 +200,10 @@ def setSize(app, size):
         app.numMines = 99
         app.fontSize = 18
     elif size == 3:
-        app.rows, app.cols, app.numMines = getSize(app)
+        app.rows, app.cols, app.numMines = getCustomSize(app)
 
-def getSize(app):
-    rows = app.getTextInput('''Enter number of rows 5-25 or -1 to cancel
+def getCustomSize(app):
+    rows = app.getTextInput('''Enter number of rows (5-25) or -1 to xcancel
                             (about 1:2 rows:cols is ideal)''')
     if rows == '-1':  
         return (-1, -1, -1)
@@ -211,10 +211,10 @@ def getSize(app):
     while not rows.isdigit() or int(rows) > 25 or int(rows) <= 4:  
         if rows == '-1':  
             return (-1, -1, -1)
-        rows = app.getTextInput('''Invalid: Enter number of rows 5-25 or 
+        rows = app.getTextInput('''Invalid: Enter number of rows (5-25) or 
                                 -1 to cancel (about 1:2 rows:cols is ideal)''')
         
-    cols = app.getTextInput('''Enter number of columns 10-50 or -1 to cancel
+    cols = app.getTextInput('''Enter number of columns (10-50) or -1 to cancel
                             (about 1:2 rows:cols is ideal)''')
     if cols == '-1':  
         return (-1, -1, -1)
@@ -222,7 +222,7 @@ def getSize(app):
     while not cols.isdigit() or int(cols) > 50 or int(cols) <= 9:  
         if cols == '-1':  
             return (-1, -1, -1)
-        cols = app.getTextInput('''Invalid: Enter number of cols 10-50 or 
+        cols = app.getTextInput('''Invalid: Enter number of cols (10-50) or 
                                 -1 to cancel (about 1:2 rows:cols is ideal)''')
         
     mines = app.getTextInput('''Enter number of mines 
@@ -238,7 +238,13 @@ def getSize(app):
                                 (less than 0.5*rows*cols) or -1 to cancel 
                                 (about 1:8 mines:tiles is ideal)''')
         
-    return int(rows), int(cols), int(mines)
+    rows, cols, mines = int(rows), int(cols), int(mines)
+    if rows > cols:
+        #Resize board to be horizontal if user input is more vertical
+        rows, cols = cols, rows
+        pass
+    
+    return rows, cols, mines
 
 def getFlagCount(app):
     if len(Tile.flagged) > app.numMines:
@@ -246,20 +252,9 @@ def getFlagCount(app):
     return app.numMines - len(Tile.flagged)
 
 def generateMines(app):
-    n = 1
+    n = 0
     (firstX, firstY) = app.firstClick
-    if firstX > 1:
-        dx = -1
-    else:
-        dx = 1
-    if firstY > 1:
-        dy = -1
-    else:
-        dy = 1
-    newX = firstX + 2 * dx
-    newY = firstY + 2 * dy
 
-    app.board[newX][newY].addMine()
     while n < app.numMines:
         x = random.randrange(app.rows)
         y = random.randrange(app.cols)
@@ -400,12 +395,15 @@ def game_onMousePress(app, mouseX, mouseY, button):
                         generateNumbers(app)
                         floodFill(app, row, col)
                         #Regenerate board in case of rectangular start
-                        if isRectangular(app):
-                            reset(app)
-                            app.firstClick = (row, col)
-                            generateMines(app)
-                            generateNumbers(app)
-                            floodFill(app, row, col)
+                        for i in range(3):
+                            if isRectangular(app):
+                                reset(app)
+                                app.firstClick = (row, col)
+                                generateMines(app)
+                                generateNumbers(app)
+                                floodFill(app, row, col)
+                                if isRectangular(app):
+                                    print('LOL')
                     #Floodfill if click on empty space
                     if app.board[row][col].value == 0:
                         floodFill(app, row, col)
@@ -660,13 +658,13 @@ def rules_redrawAll(app):
     drawLabel('Rules', app.width/2, app.height/10, align='top',
               bold=True, size=48)
     text = [
-        'Mines will be placed randomly on the board',
+        'Hidden mines will be placed randomly on the board',
         'Left-click to reveal tiles',
         'Right-click to flag/unflag',
         'Revealed tiles with numbers indicate the',
         'number of mines immediately around the tile',
-        'Revealing a mine leads to lose',
-        'Flagging all mines leads to win',
+        'Revealing a mine leads to a loss',
+        'Flagging all mines leads to a win',
         'Press p to pause',
         'Press r to restart',
         'Press h for a hint (blue for clear, red for mine)',
